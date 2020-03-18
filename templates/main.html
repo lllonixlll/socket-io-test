@@ -1,0 +1,154 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>Test</title>
+    <style>
+        body {
+            font: 13px Helvetica, Arial;
+            background: #eee;
+        }
+
+        #bg {
+            /* background: #666; */
+            width: 1000px;
+            height: 600px;
+            position: relative;
+        }
+
+        .canvas {
+            position: absolute;
+            width: 1000px;
+            height: 600px;
+            top: 0px;
+            left: 0px;
+        }
+    </style>
+</head>
+
+<body>
+    <script src="/socket.io/socket.io.js"></script>
+    <div id="bg">
+        <canvas id="trails" class="canvas" width="1000" height="600"></canvas>
+        <canvas id="players" class="canvas" width="1000" height="600"></canvas>
+    </div>
+
+    <script>
+        (function () {
+            let socket = io();
+            let players = [];
+            let player = {
+                id: null,
+                move: false
+            };
+
+            const screenSize = {
+                width: 1000,
+                height: 600
+            }
+
+            const canvasPlayers = document.querySelector('#players');
+            const canvasTrails = document.querySelector('#trails');
+            const ctxPlayers = canvasPlayers.getContext("2d");
+            const ctxTrails = canvasTrails.getContext("2d");
+
+            canvasPlayers.addEventListener('mousedown', function (e) {
+                const dist = Math.sqrt(Math.pow(player.x - e.x, 2) + Math.pow(player.y - e.y, 2));
+                if (dist < 25) {
+                    player.move = true;
+                }
+            });
+
+            canvasPlayers.addEventListener('mouseup', function (e) {
+                player.move = false;
+            });
+
+            canvasPlayers.addEventListener('mousemove', function (e) {
+                if (player.move == true) {
+                    drawLine(player.x, player.y, e.x, e.y);
+                    player.x = e.x;
+                    player.y = e.y;
+                    socket.emit('move', { x: player.x, y: player.y });
+                }
+
+                drawPlayers();
+            });
+
+            socket.emit('join', {});
+
+            socket.on('join', function (data) {
+                const newPlayer = data[data.length - 1];
+                console.log(data);
+
+                if (players.length == 0) {
+                    players = data;
+                    player = newPlayer;
+                    player.main = true;
+                    player.move = false;
+                } else {
+                    players.push(newPlayer);
+                }
+
+                drawPlayers();
+            });
+
+            socket.on('disconnect', function (id) {
+                players.forEach(function (p) {
+                    if (p.id == id) {
+                        console.log('Disconnect ' + id)
+                        players.splice(players.indexOf(p), 1);
+                    }
+                })
+
+                drawPlayers();
+            });
+
+            socket.on('move', function (data) {
+                players.forEach(function (p) {
+                    if (p.id == data.id && p.id != player.id) {
+                        drawLine(p.x, p.y, data.x, data.y, '#00FF00');
+                        p.x = data.x;
+                        p.y = data.y;
+                    }
+                });
+
+                drawPlayers();
+            });
+
+
+            function drawPlayers() {
+                ctxPlayers.clearRect(0, 0, screenSize.width, screenSize.height);
+
+                players.forEach(function (player) {
+                    ctxPlayers.beginPath();
+
+                    if (player.main == true) {
+                        ctxPlayers.fillStyle = "#660000";
+                    } else {
+                        ctxPlayers.fillStyle = "#006600";
+                    }
+
+                    ctxPlayers.arc(player.x, player.y, 15, 0, 2 * Math.PI);
+                    ctxPlayers.fill();
+                });
+            }
+
+            function drawLine(x, y, toX, toY, color = "#FF0000") {
+                ctxTrails.beginPath();
+                ctxTrails.strokeStyle = color;
+                ctxTrails.fillStyle = color;
+                ctxTrails.lineWidth = 5;
+
+                ctxTrails.arc(x, y, 0.3, 0, 2 * Math.PI);
+                ctxTrails.fill();
+
+                ctxTrails.moveTo(x, y);
+                ctxTrails.lineTo(toX, toY);
+                ctxTrails.stroke();
+            }
+        })();
+
+    </script>
+</body>
+
+</html>
